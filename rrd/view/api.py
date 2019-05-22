@@ -1,5 +1,7 @@
-#-*- coding:utf-8 -*-
+# -*- coding:utf-8 -*-
 import json
+import re
+
 from flask import request, abort, g
 from rrd import app
 
@@ -7,6 +9,7 @@ from rrd.model.tag_endpoint import TagEndpoint
 from rrd.model.endpoint import Endpoint
 from rrd.model.endpoint_counter import EndpointCounter
 from rrd.model.graph import TmpGraph
+
 
 @app.route("/api/endpoints")
 def api_endpoints():
@@ -24,7 +27,7 @@ def api_endpoints():
     if not q and not tags:
         ret["msg"] = "no query params given"
         return json.dumps(ret)
-    
+
     endpoints = []
 
     if tags and q:
@@ -54,7 +57,19 @@ def api_get_counters():
     endpoints = request.form.get("endpoints") or ""
     endpoints = endpoints and json.loads(endpoints)
     q = request.form.get("q") or ""
+    start_time = request.form.get("start_time") or ""
+    end_time = request.form.get("end_time") or ""
     limit = int(request.form.get("limit") or 100)
+
+    date_format_re = '^\d{4}-\d{2}-\d{2}$'
+
+    if start_time and re.match(date_format_re, start_time) is None:
+        ret['msg'] = "invalid start_time format ,it should be 'yyyy-MM-dd', start_time: " + start_time
+        return json.dumps(ret)
+
+    if end_time and re.match(date_format_re, end_time) is None:
+        ret['msg'] = "invalid end_time format ,it should be 'yyyy-MM-dd', end_time: " + end_time
+        return json.dumps(ret)
 
     if not (endpoints or q):
         ret['msg'] = "no endpoints or counter given"
@@ -68,14 +83,15 @@ def api_get_counters():
 
     if q:
         qs = q.split()
-        ecs = EndpointCounter.search_in_endpoint_ids(qs, endpoint_ids, limit=limit)
+        ecs = EndpointCounter.search_in_endpoint_ids(qs, endpoint_ids, limit=limit,
+                                                     start_time=start_time, end_time=end_time)
     else:
         ecs = EndpointCounter.gets_by_endpoint_ids(endpoint_ids, limit=limit)
 
     if not ecs:
         ret["msg"] = "no counters in graph"
         return json.dumps(ret)
-    
+
     counters_map = {}
     for x in ecs:
         counters_map[x.counter] = [x.counter, x.type_, x.step]
@@ -87,7 +103,8 @@ def api_get_counters():
 
     return json.dumps(ret)
 
-@app.route("/api/tmpgraph", methods=["POST",])
+
+@app.route("/api/tmpgraph", methods=["POST", ])
 def api_create_tmpgraph():
     d = request.data
     jdata = json.loads(d)

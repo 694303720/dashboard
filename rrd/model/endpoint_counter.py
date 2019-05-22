@@ -14,7 +14,7 @@ class EndpointCounter(object):
     __str__ = __repr__
 
     @classmethod
-    def search_in_endpoint_ids(cls, qs, endpoint_ids, start=0, limit=100):
+    def search_in_endpoint_ids(cls, qs, endpoint_ids, start=0, limit=100, start_time=None, end_time=None):
         if not endpoint_ids:
             return []
 
@@ -24,11 +24,17 @@ class EndpointCounter(object):
         args = endpoint_ids
         for q in qs:
             args.append("%"+q+"%")
-        args += [start, limit]
 
         sql = '''select id, endpoint_id, counter, step, type from endpoint_counter where endpoint_id in (''' +placeholder+ ''') '''
         for q in qs:
             sql += ''' and counter like %s'''
+        if start_time:
+            sql += ''' and t_create >= %s'''
+            args.append(start_time)
+        if end_time:
+            sql += ''' and t_create <= %s'''
+            args.append(end_time)
+        args += [start, limit]
         sql += ''' limit %s,%s'''
 
         cursor = db_conn.execute(sql, args)
